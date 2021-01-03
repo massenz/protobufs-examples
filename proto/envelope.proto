@@ -1,0 +1,26 @@
+// Copyright (c) 2020 AlertAvert.com.  All rights reserved.
+// Licensed under the Apache 2 License terms.
+
+syntax = "proto3";
+package io.kapsules;
+
+// We still want reflection and the full-fat version of Protobuf, but we can try to optimize for
+// code size.
+// See: https://developers.google.com/protocol-buffers/docs/reference/cpp/google.protobuf.message_lite
+option optimize_for = CODE_SIZE;
+
+// Used to carry an arbitrary payload.
+// See: https://developers.google.com/protocol-buffers/docs/proto3#any
+import "google/protobuf/any.proto";
+message Envelope {
+    string sender = 1;
+    string message = 2;
+
+    // Opaque payload type identifier, could be anything that helps the
+    // client to decode the payload correctly.
+    uint32 payload_type_id = 99;
+
+    // This is the actual payload, another Protocol Buffer.
+    // See the description for the Any type.
+    google.protobuf.Any payload = 3;
+}

@@ -35,7 +35,7 @@ if (${COMMONS_FILE} STREQUAL NOTFOUND)
 else ()
     get_build_id(BUILD_ID)
     if (BUILD_ID)
-        string(concat RELEASE_STRING RELEASE_STRING "-" BUILD_ID)
+        string(CONCAT RELEASE_STRING ${RELEASE_STRING} "-" ${BUILD_ID})
     endif ()
 endif ()
 message(STATUS "Building Release: ${RELEASE_STRING} (${CMAKE_BUILD_TYPE})")
@@ -66,75 +66,29 @@ configure_file(
     ${PROJECT_BINARY_DIR}/version.h
 )
 
-# Building Protocol Buffers.
-#
-find_package(Protobuf REQUIRED)
-
-if(${PROTOBUF_FOUND})
-    PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS ${PROTO_DIR}/demo.proto)
-    message(STATUS "When generated, Protocol Buffer files will be in:\n"
-        "\tHeaders: ${PROTO_HDRS}\n\tSources: ${PROTO_SRCS}\n"
-        "protoc: ${PROTOBUF_PROTOC_EXECUTABLE}\n"
-        "protoc lib: ${PROTOBUF_PROTOC_LIBRARY}\n"
-        "protobuf lib: ${PROTOBUF_LIBRARY}"
-)
-else()
-    message(FATAL_ERROR "Could not find Google Protocol Buffers libraries")
-endif()
+set(PROTOS
+        ${PROTO_DIR}/envelope.proto
+        ${PROTO_DIR}/payload.proto)
+build_protobuf(PROTOS GEN_PROTO_SRCS GEN_PROTO_HEADERS)
 
 include_directories(
         ${INCLUDE_DIR}
-        ${PROJECT_BINARY_DIR}
         ${CMAKE_BINARY_DIR}
-        ${PROTOBUF_INCLUDE_DIRS}
-        ${PROTO_HDRS}
         ${INSTALL_DIR}/include
 )
 
 link_directories(
-        ${INSTALL_DIR}/lib
         ${PROJECT_BINARY_DIR}/lib
+        ${INSTALL_DIR}/lib
 )
 
-# TODO: Your source files go here.
-set(SOURCES
-        ${PROTO_SRCS}
-        ${SOURCE_DIR}/Sample.cpp
-)
+set(SOURCES ${GEN_PROTO_SRCS})
 
-# TODO: the library dependencies go here
 set(UTILS_LIBS
         ${GLOG}
         ${PROTOBUF}
         pthread
 )
-
-##
-# Shared (dynamic) library will be built here.
-#
-#add_library(mylib SHARED
-#        ${SOURCES}
-#)
-#target_link_libraries(distutils ${UTILS_LIBS})
-
-
-if (DEFINED INSTALL_DIR)
-    message(STATUS "Installing shared libraries to ${INSTALL_DIR}/lib "
-                   "and include files to ${INSTALL_DIR}/include/${PROJECT_NAME}")
-#    install(TARGETS your_libs DESTINATION ${INSTALL_DIR}/lib)
-
-    # Generated configuration file, containing version and build number.
-    install(FILES ${PROJECT_BINARY_DIR}/version.h DESTINATION
-            "${INSTALL_DIR}/include/${PROJECT_NAME}")
-
-    # Install Library headers.
-    install(DIRECTORY ${INCLUDE_DIR}/ DESTINATION ${INSTALL_DIR}/include/${PROJECT_NAME}
-            FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
-
-else ()
-    message(WARNING "INSTALL_DIR is not defined, files will not be installed."
-                    " Use -DINSTALL_DIR=/path/to/install to enable")
-endif ()
 
 # Unit tests build is defined in the tests/ folder
 add_subdirectory(${TESTS_DIR})
@@ -145,17 +99,11 @@ add_subdirectory(${TESTS_DIR})
 
 set(EXAMPLES_DIR ${SOURCE_DIR}/examples)
 
-# Examples will use the latest build for the shared libraries
-link_directories(
-        ${CMAKE_BINARY_DIR}/lib
-        ${INSTALL_DIR}/lib
-)
-
 ##
 # Demo
 #
-add_executable(demo
-        ${EXAMPLES_DIR}/demo.cpp
+add_executable(${PROJECT_NAME}
+        ${EXAMPLES_DIR}/pb-demo.cpp
         ${SOURCES}
 )
-target_link_libraries(demo ${UTILS_LIBS})
+target_link_libraries(${PROJECT_NAME} ${UTILS_LIBS} distutils)

@@ -10,3 +10,4 @@
 #define BUILD_ID "@BUILD_ID@"
 
 #define RELEASE_STR "@RELEASE_STRING@"
+#define PROJECT_NAME "@PROJECT_NAME@"

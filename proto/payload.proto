@@ -1,0 +1,29 @@
+// Copyright (c) 2020 AlertAvert.com.  All rights reserved.
+// Licensed under the Apache 2 License terms.
+
+syntax = "proto3";
+package io.kapsules.clients;
+
+// We still want reflection and the full-fat version of Protobuf, but we can try to optimize for
+// code size.
+// See: https://developers.google.com/protocol-buffers/docs/reference/cpp/google.protobuf.message_lite
+option optimize_for = CODE_SIZE;
+
+enum PayloadType {
+  SERVER_TYPE = 0;
+  SOURCES_TYPE = 1;
+  OTHER = 99;
+}
+
+// Assume that this one is not known at time of compilation of Envelope
+message Server {
+  string server = 1;
+  string location = 2;
+  uint32 server_id = 3;
+}
+
+// This could also be carried by the Envelope
+message Sources {
+  string package = 1;
+  repeated string sources = 2;
+}
