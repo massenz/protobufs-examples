@@ -1,4 +1,4 @@
-// Copyright (c) 2020 AlertAvert.com. All rights reserved.
+// Copyright (c) 2021 AlertAvert.com. All rights reserved.
 // Created by M. Massenzio (marco@alertavert.com)
 
 #include <iostream>
@@ -7,6 +7,8 @@
 #include <glog/logging.h>
 
 #include <google/protobuf/util/json_util.h>
+
+#include <json.hpp>
 
 #include "distlib/utils/ParseArgs.hpp"
 #include "envelope.pb.h"
@@ -42,9 +44,10 @@ inline std::ostream &Print(
 ) {
   out << "From: " << envelope.sender() << endl;
   out << "Subject: " << envelope.message() << endl;
-  out << "Type ID: " << envelope.payload_type_id() << endl << endl;
 
   if (envelope.has_payload()) {
+    out << "Type: " << envelope.payload().type_url()
+        << " (" << envelope.payload_type_id() << ")" << endl;
     out << "---- Payload ----" << endl;
     const auto &payload = envelope.payload();
     if (payload.Is<P>()) {
@@ -52,9 +55,27 @@ inline std::ostream &Print(
       payload.UnpackTo(&content);
       cout << content << endl;
     }
+    out << "---- Payload Ends ----" << endl;
   }
   return out;
 }
+
+void fromJson(const nlohmann::json &jsonData) {
+  io::kapsules::Envelope fromJson;
+  google::protobuf::util::Status status =
+      google::protobuf::util::JsonStringToMessage(jsonData.dump(), &fromJson);
+  if (status.ok()) {
+    cout << "\n----\nProtobuf extracted from JSON:" << endl;
+    if (fromJson.has_payload() && fromJson.payload().Is<Server>()) {
+      Print<Server>(fromJson);
+    } else {
+      Print<Sources>(fromJson);
+    }
+  } else {
+    LOG(ERROR) << "Could not convert server from JSON: " << status.error_message();
+  }
+}
+
 
 void usage(const std::string &arg) {
   regex progname{"/?(\\w+)$"};
@@ -145,7 +166,47 @@ int main(int argc, const char *argv[]) {
   options.always_print_primitive_fields = true;
 
   auto status = google::protobuf::util::MessageToJsonString(envelope, &jsonOut, options);
-  std::cout << jsonOut << std::endl;
+  if (status.ok()) {
+    using nlohmann::json;
+    auto data = json::parse(jsonOut);
+
+    // The entire envelope, including payload, can be serialized as JSON:
+    cout << data.dump(2) << endl;
+
+    // Or you can extract specific fields:
+    if (data["payload"].contains("server")) {
+      cout << "Server: " << data["payload"]["server"] << endl;
+    }
+
+    // From the JSON, we can reconstruct the Protobufs.
+    // This just extracts the whole Envelope from JSON:
+    fromJson(data);
+
+    // Finally, from the JSON, one can just reconstruct the Payload
+    auto payload = data["payload"];
+
+    // Here we would validate the type as one known, before dropping it.
+    cout << "Received a JSON payload of type: " << payload["@type"] << endl;
+    if (payload["@type"].is_string()) {
+      auto type = payload["@type"].get<std::string>();
+      if (type.find("io.kapsules.clients.Server") != std::string::npos) {
+        Server fromJson;
+
+        // We need to remove the @type annotation, or Google Protobuf parser will complain
+        // The Server PB has no knowledge of the Any configured in Envelope.
+        payload.erase("@type");
+        status = google::protobuf::util::JsonStringToMessage(payload.dump(), &fromJson);
+        if (status.ok()) {
+          cout << "Protobuf extracted from JSON payload:" << endl;
+          cout << fromJson;
+        } else {
+          LOG(ERROR) << "Could not convert server from JSON: " << status.error_message();
+        }
+      }
+    }
+  } else {
+    LOG(ERROR) << "Could not convert Envelope Protobuf to JSON: " << status.error_message();
+  }
 
   google::protobuf::ShutdownProtobufLibrary();
   return EXIT_SUCCESS;
